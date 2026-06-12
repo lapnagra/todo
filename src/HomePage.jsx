@@ -141,7 +141,7 @@ function PlayerTurnGate({ player, onReveal }) {
   )
 }
 
-function PlayerTurn({ player, isDealer, onHit, onStand }) {
+function PlayerTurn({ player, isDealer, allPlayers, onHit, onStand }) {
   const total = handTotal(player.hand)
   const bust = isBust(player.hand)
   const bj = isBlackjack(player.hand)
@@ -152,7 +152,31 @@ function PlayerTurn({ player, isDealer, onHit, onStand }) {
       <div style={{ background: '#2c3e50', color: '#fff', padding: '8px 20px', borderRadius: 20, fontSize: '1.1rem' }}>
         {player.name}'s turn {isDealer ? '(Dealer)' : ''}
       </div>
-      <div>
+
+      {isDealer && allPlayers.filter(p => p.name !== player.name).length > 0 && (
+        <div style={{ width: '100%', maxWidth: 560 }}>
+          <h3 style={{ margin: '0 0 10px', color: '#555' }}>All player hands</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {allPlayers.filter(p => p.name !== player.name).map(p => {
+              const pt = handTotal(p.hand)
+              const pb = isBust(p.hand)
+              const pbj = isBlackjack(p.hand)
+              return (
+                <div key={p.name} style={{ background: '#f4f4f4', borderRadius: 10, padding: '12px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                    {p.name} — <span style={{ color: pb ? '#c0392b' : '#333' }}>{pb ? 'BUST' : pbj ? 'BLACKJACK!' : `Total: ${pt}`}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {p.hand.map((card, i) => <Card key={i} card={card} />)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ width: '100%', maxWidth: 560 }}>
         <div style={{ fontWeight: 'bold', marginBottom: 8 }}>Your hand — {bust ? 'BUST' : bj ? 'BLACKJACK!' : `Total: ${total}`}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {player.hand.map((card, i) => <Card key={i} card={card} />)}
@@ -229,10 +253,11 @@ function Results({ players, onNewGame }) {
 // --- Main game orchestrator ---
 export default function HomePage() {
   const [phase, setPhase] = useState('lobby') // lobby | gate | playing | done
-  const [players, setPlayers] = useState([])   // [{ name, hand, done }]
+  const [players, setPlayers] = useState([])   // [{ name, hand, done }], index 0 = dealer
   const [deck, setDeck] = useState([])
-  const [turnIndex, setTurnIndex] = useState(0)
-  const [revealed, setRevealed] = useState(false)
+  // turnOrder: non-dealers first, dealer (index 0) last
+  const [turnOrder, setTurnOrder] = useState([])
+  const [turnStep, setTurnStep] = useState(0)  // index into turnOrder
 
   function joinLobby(name) {
     setPlayers(prev => [...prev, { name, hand: [], done: false }])
@@ -240,23 +265,29 @@ export default function HomePage() {
 
   function startGame() {
     const newDeck = makeDeck()
-    const dealt = players.map(p => ({ ...p, hand: [newDeck.pop(), newDeck.pop()], done: false }))
+    // Deal to non-dealers first, then dealer — all get 2 cards
+    const order = [...players.slice(1).map((_, i) => i + 1), 0]
+    const dealt = players.map(p => ({ ...p, hand: [], done: false }))
+    order.forEach(i => {
+      dealt[i] = { ...dealt[i], hand: [newDeck.pop(), newDeck.pop()] }
+    })
     setDeck(newDeck)
     setPlayers(dealt)
-    setTurnIndex(0)
-    setRevealed(false)
+    setTurnOrder(order)
+    setTurnStep(0)
     setPhase('gate')
   }
 
-  function advanceTurn(updatedPlayers, currentIndex) {
-    const next = currentIndex + 1
-    if (next >= updatedPlayers.length) {
+  const currentPlayerIndex = turnOrder[turnStep]
+
+  function advanceTurn(updatedPlayers) {
+    const next = turnStep + 1
+    if (next >= turnOrder.length) {
       setPlayers(updatedPlayers)
       setPhase('done')
     } else {
       setPlayers(updatedPlayers)
-      setTurnIndex(next)
-      setRevealed(false)
+      setTurnStep(next)
       setPhase('gate')
     }
   }
@@ -264,29 +295,25 @@ export default function HomePage() {
   function hit() {
     const newDeck = [...deck]
     const card = newDeck.pop()
-    const updated = players.map((p, i) => i === turnIndex ? { ...p, hand: [...p.hand, card] } : p)
+    const updated = players.map((p, i) => i === currentPlayerIndex ? { ...p, hand: [...p.hand, card] } : p)
     setDeck(newDeck)
-    const player = updated[turnIndex]
-    if (isBust(player.hand) || isBlackjack(player.hand)) {
-      setPlayers(updated.map((p, i) => i === turnIndex ? { ...p, done: true } : p))
-    } else {
-      setPlayers(updated)
-    }
+    setPlayers(updated)
   }
 
   function stand() {
-    const updated = players.map((p, i) => i === turnIndex ? { ...p, done: true } : p)
-    advanceTurn(updated, turnIndex)
+    const updated = players.map((p, i) => i === currentPlayerIndex ? { ...p, done: true } : p)
+    advanceTurn(updated)
   }
 
   function continueTurn() {
-    // Called after a bust/blackjack auto-end
-    const updated = players.map((p, i) => i === turnIndex ? { ...p, done: true } : p)
-    advanceTurn(updated, turnIndex)
+    const updated = players.map((p, i) => i === currentPlayerIndex ? { ...p, done: true } : p)
+    advanceTurn(updated)
   }
 
   function newGame() {
     setPlayers(players.map(p => ({ ...p, hand: [], done: false })))
+    setTurnOrder([])
+    setTurnStep(0)
     setPhase('lobby')
   }
 
@@ -297,21 +324,23 @@ export default function HomePage() {
   if (phase === 'gate') {
     return (
       <PlayerTurnGate
-        player={players[turnIndex]}
-        onReveal={() => { setRevealed(true); setPhase('playing') }}
+        player={players[currentPlayerIndex]}
+        onReveal={() => setPhase('playing')}
       />
     )
   }
 
   if (phase === 'playing') {
-    const player = players[turnIndex]
+    const player = players[currentPlayerIndex]
+    const isDealer = currentPlayerIndex === 0
     const bust = isBust(player.hand)
     const bj = isBlackjack(player.hand)
     return (
       <div>
         <PlayerTurn
           player={player}
-          isDealer={turnIndex === 0}
+          isDealer={isDealer}
+          allPlayers={players}
           onHit={hit}
           onStand={stand}
         />
