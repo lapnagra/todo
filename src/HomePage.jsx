@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+// --- Deck helpers ---
 const SUITS = ['♠', '♥', '♦', '♣']
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
 
@@ -28,141 +29,302 @@ function handTotal(hand) {
 function isBust(hand) { return handTotal(hand) > 21 }
 function isBlackjack(hand) { return hand.length === 2 && handTotal(hand) === 21 }
 
-function Card({ card, hidden }) {
+// --- Styles ---
+const btn = (bg, disabled) => ({
+  padding: '10px 28px', fontSize: '1rem', cursor: disabled ? 'not-allowed' : 'pointer',
+  borderRadius: 8, border: 'none', background: disabled ? '#aaa' : bg,
+  color: '#fff', fontWeight: 'bold', opacity: disabled ? 0.6 : 1,
+})
+
+// --- Card component ---
+function Card({ card }) {
   const red = card.suit === '♥' || card.suit === '♦'
   return (
     <div style={{
-      width: 60, height: 90, border: '2px solid #555', borderRadius: 8,
-      background: hidden ? '#1a6b3a' : '#fff',
+      width: 60, height: 90, border: '2px solid #555', borderRadius: 8, background: '#fff',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       padding: '4px 6px', fontSize: '1rem', fontWeight: 'bold',
-      color: hidden ? 'transparent' : (red ? '#c0392b' : '#222'),
-      boxShadow: '2px 2px 6px rgba(0,0,0,0.2)', flexShrink: 0,
+      color: red ? '#c0392b' : '#222', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)', flexShrink: 0,
     }}>
-      {!hidden && <><span>{card.rank}{card.suit}</span><span style={{ alignSelf: 'flex-end', transform: 'rotate(180deg)' }}>{card.rank}{card.suit}</span></>}
+      <span>{card.rank}{card.suit}</span>
+      <span style={{ alignSelf: 'flex-end', transform: 'rotate(180deg)' }}>{card.rank}{card.suit}</span>
     </div>
   )
 }
 
-function Hand({ hand, hideSecond, label, total, bust, blackjack }) {
+function FaceDownCard() {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ marginBottom: 6, fontWeight: 'bold', fontSize: '1.1rem' }}>
-        {label}
-        {!hideSecond && <span style={{ marginLeft: 8, fontWeight: 'normal', color: bust ? '#c0392b' : '#333' }}>
-          {bust ? 'BUST' : blackjack ? 'BLACKJACK!' : `(${total})`}
-        </span>}
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {hand.map((card, i) => <Card key={i} card={card} hidden={hideSecond && i === 1} />)}
-      </div>
-    </div>
+    <div style={{
+      width: 60, height: 90, border: '2px solid #555', borderRadius: 8,
+      background: 'repeating-linear-gradient(45deg,#1a6b3a,#1a6b3a 5px,#145c30 5px,#145c30 10px)',
+      boxShadow: '2px 2px 6px rgba(0,0,0,0.2)', flexShrink: 0,
+    }} />
   )
 }
 
-function initGame() {
-  const deck = makeDeck()
-  const p1 = [deck.pop(), deck.pop()]
-  const p2 = [deck.pop(), deck.pop()]
-  return { deck, p1, p2, turn: 1, p1Done: false, p2Done: false, phase: 'playing' }
-}
+// --- Screens ---
 
-function getResult(state) {
-  const t1 = handTotal(state.p1)
-  const t2 = handTotal(state.p2)
-  const b1 = isBust(state.p1)
-  const b2 = isBust(state.p2)
-  const bj1 = isBlackjack(state.p1)
-  const bj2 = isBlackjack(state.p2)
-  if (b1 && b2) return 'Both bust — tie!'
-  if (b1) return 'Player 1 busts — Player 2 wins!'
-  if (b2) return 'Player 2 busts — Player 1 wins!'
-  if (bj1 && bj2) return 'Both have Blackjack — tie!'
-  if (bj1) return 'Player 1 wins with Blackjack!'
-  if (bj2) return 'Player 2 wins with Blackjack!'
-  if (t1 > t2) return `Player 1 wins! (${t1} vs ${t2})`
-  if (t2 > t1) return `Player 2 wins! (${t2} vs ${t1})`
-  return `Tie! Both have ${t1}`
-}
+function NameEntry({ players, onJoin, onStart, maxPlayers = 6 }) {
+  const [name, setName] = useState('')
+  const isDealer = players.length === 0
+  const canStart = players.length >= 2
+  const full = players.length >= maxPlayers
+  const alreadyJoined = name.trim() && players.some(p => p.name.toLowerCase() === name.trim().toLowerCase())
 
-export default function HomePage() {
-  const [game, setGame] = useState(() => initGame())
-
-  const { deck, p1, p2, turn, p1Done, p2Done, phase } = game
-  const currentHand = turn === 1 ? p1 : p2
-
-  function hit() {
-    if (phase !== 'playing') return
-    const newDeck = [...deck]
-    const card = newDeck.pop()
-    const newHand = [...currentHand, card]
-    const bust = isBust(newHand)
-    if (turn === 1) {
-      const nowDone = bust
-      setGame(g => ({ ...g, deck: newDeck, p1: newHand, p1Done: nowDone, turn: nowDone ? 2 : 1, phase: (nowDone && g.p2Done) ? 'done' : 'playing' }))
-    } else {
-      setGame(g => ({ ...g, deck: newDeck, p2: newHand, p2Done: bust, phase: (g.p1Done && bust) ? 'done' : 'playing' }))
-    }
+  function join(e) {
+    e.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed || alreadyJoined) return
+    onJoin(trimmed)
+    setName('')
   }
 
-  function stand() {
-    if (phase !== 'playing') return
-    if (turn === 1) {
-      setGame(g => ({ ...g, p1Done: true, turn: 2, phase: g.p2Done ? 'done' : 'playing' }))
-    } else {
-      setGame(g => ({ ...g, p2Done: true, phase: 'done' }))
-    }
-  }
+  return (
+    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif', gap: 24, padding: 24 }}>
+      <h1 style={{ margin: 0 }}>Blackjack</h1>
+      <div style={{ background: '#f4f4f4', borderRadius: 12, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ margin: '0 0 16px' }}>Game Lobby</h2>
+        {!full && (
+          <form onSubmit={join} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Enter your name"
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '2px solid #ccc', fontSize: '1rem' }}
+            />
+            <button type="submit" style={btn('#2c3e50', !name.trim() || alreadyJoined)}>
+              Join
+            </button>
+          </form>
+        )}
+        {players.length === 0 ? (
+          <p style={{ color: '#888', margin: 0 }}>No players yet. Be the first to join — you'll be the dealer.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px' }}>
+            {players.map((p, i) => (
+              <li key={p.name} style={{ padding: '8px 12px', background: '#fff', borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                <span>{p.name}</span>
+                {i === 0 && <span style={{ fontSize: '0.8rem', background: '#2c3e50', color: '#fff', padding: '2px 8px', borderRadius: 10 }}>Dealer</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {players.length > 0 && (
+          <div style={{ borderTop: '1px solid #ddd', paddingTop: 16 }}>
+            <p style={{ margin: '0 0 12px', color: '#555', fontSize: '0.9rem' }}>
+              {players[0].name} (dealer) starts the game when everyone has joined.
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: '0.9rem', color: '#888' }}>Dealer only:</span>
+              <button style={btn('#27ae60', !canStart)} disabled={!canStart} onClick={onStart}>
+                Start Game
+              </button>
+            </div>
+            {!canStart && <p style={{ color: '#e74c3c', fontSize: '0.85rem', margin: '8px 0 0' }}>Need at least 2 players to start.</p>}
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
 
-  // Recalculate after state updates by deriving from game
-  const isDone = phase === 'done' || (p1Done && p2Done)
-  const result = isDone ? getResult({ p1, p2 }) : null
+function PlayerTurnGate({ player, onReveal }) {
+  return (
+    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif', gap: 24, padding: 24 }}>
+      <h1 style={{ margin: 0 }}>Blackjack</h1>
+      <div style={{ background: '#f4f4f4', borderRadius: 12, padding: 32, textAlign: 'center', maxWidth: 360, width: '100%', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
+        <p style={{ fontSize: '1.2rem', marginBottom: 8 }}>Pass the device to</p>
+        <h2 style={{ margin: '0 0 24px', fontSize: '2rem' }}>{player.name}</h2>
+        <button style={btn('#2c3e50')} onClick={onReveal}>I'm {player.name} — show my cards</button>
+      </div>
+    </main>
+  )
+}
 
-  const btnStyle = (color) => ({
-    padding: '10px 28px', fontSize: '1rem', cursor: 'pointer',
-    borderRadius: 8, border: 'none', background: color, color: '#fff', fontWeight: 'bold',
-  })
+function PlayerTurn({ player, isDealer, onHit, onStand }) {
+  const total = handTotal(player.hand)
+  const bust = isBust(player.hand)
+  const bj = isBlackjack(player.hand)
 
   return (
     <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif', gap: 20, padding: 24 }}>
       <h1 style={{ margin: 0 }}>Blackjack</h1>
-
-      {!isDone && (
-        <div style={{ fontSize: '1.1rem', background: '#2c3e50', color: '#fff', padding: '8px 20px', borderRadius: 20 }}>
-          Player {turn}'s turn
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <div>
-          <Hand
-            hand={p1} label="Player 1"
-            hideSecond={!p1Done && turn === 2 && !isDone}
-            total={handTotal(p1)} bust={isBust(p1)} blackjack={isBlackjack(p1)}
-          />
-        </div>
-        <div>
-          <Hand
-            hand={p2} label="Player 2"
-            hideSecond={!p2Done && turn === 1 && !isDone}
-            total={handTotal(p2)} bust={isBust(p2)} blackjack={isBlackjack(p2)}
-          />
+      <div style={{ background: '#2c3e50', color: '#fff', padding: '8px 20px', borderRadius: 20, fontSize: '1.1rem' }}>
+        {player.name}'s turn {isDealer ? '(Dealer)' : ''}
+      </div>
+      <div>
+        <div style={{ fontWeight: 'bold', marginBottom: 8 }}>Your hand — {bust ? 'BUST' : bj ? 'BLACKJACK!' : `Total: ${total}`}</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {player.hand.map((card, i) => <Card key={i} card={card} />)}
         </div>
       </div>
-
-      {!isDone && (
+      {!bust && !bj && (
         <div style={{ display: 'flex', gap: 12 }}>
-          <button style={btnStyle('#27ae60')} onClick={hit}>Hit</button>
-          <button style={btnStyle('#e67e22')} onClick={stand}>Stand</button>
+          <button style={btn('#27ae60')} onClick={onHit}>Hit</button>
+          <button style={btn('#e67e22')} onClick={onStand}>Stand</button>
         </div>
       )}
-
-      {isDone && (
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 16 }}>{result}</div>
-          <button style={btnStyle('#2c3e50')} onClick={() => setGame(initGame())}>New Game</button>
-        </div>
+      {(bust || bj) && (
+        <p style={{ color: bust ? '#c0392b' : '#27ae60', fontWeight: 'bold', fontSize: '1.1rem' }}>
+          {bust ? 'You busted! Your turn is over.' : 'Blackjack! Your turn is over.'}
+        </p>
       )}
     </main>
   )
+}
+
+function Results({ players, onNewGame }) {
+  const dealer = players[0]
+  const dealerTotal = handTotal(dealer.hand)
+  const dealerBust = isBust(dealer.hand)
+
+  function outcome(player) {
+    const pt = handTotal(player.hand)
+    const pb = isBust(player.hand)
+    const pbj = isBlackjack(player.hand)
+    const dbj = isBlackjack(dealer.hand)
+    if (pb) return { label: 'Bust', color: '#c0392b' }
+    if (pbj && dbj) return { label: 'Tie (both Blackjack)', color: '#888' }
+    if (pbj) return { label: 'Blackjack! Win', color: '#27ae60' }
+    if (dealerBust) return { label: 'Win (dealer bust)', color: '#27ae60' }
+    if (dbj) return { label: 'Loss (dealer Blackjack)', color: '#c0392b' }
+    if (pt > dealerTotal) return { label: `Win (${pt} vs ${dealerTotal})`, color: '#27ae60' }
+    if (pt < dealerTotal) return { label: `Loss (${pt} vs ${dealerTotal})`, color: '#c0392b' }
+    return { label: `Tie (${pt})`, color: '#888' }
+  }
+
+  return (
+    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif', gap: 20, padding: 24 }}>
+      <h1 style={{ margin: 0 }}>Results</h1>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: 500 }}>
+        {players.map((p, i) => {
+          const total = handTotal(p.hand)
+          const bust = isBust(p.hand)
+          const bj = isBlackjack(p.hand)
+          const result = i === 0 ? null : outcome(p)
+          return (
+            <div key={p.name} style={{ background: '#f4f4f4', borderRadius: 12, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{p.name} {i === 0 ? '(Dealer)' : ''}</span>
+                {result
+                  ? <span style={{ fontWeight: 'bold', color: result.color }}>{result.label}</span>
+                  : <span style={{ color: '#555' }}>{bust ? 'BUST' : bj ? 'BLACKJACK!' : `Total: ${total}`}</span>
+                }
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {p.hand.map((card, ci) => <Card key={ci} card={card} />)}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ color: '#555', margin: '0 0 12px', fontSize: '0.9rem' }}>Dealer only:</p>
+        <button style={btn('#2c3e50')} onClick={onNewGame}>New Game</button>
+      </div>
+    </main>
+  )
+}
+
+// --- Main game orchestrator ---
+export default function HomePage() {
+  const [phase, setPhase] = useState('lobby') // lobby | gate | playing | done
+  const [players, setPlayers] = useState([])   // [{ name, hand, done }]
+  const [deck, setDeck] = useState([])
+  const [turnIndex, setTurnIndex] = useState(0)
+  const [revealed, setRevealed] = useState(false)
+
+  function joinLobby(name) {
+    setPlayers(prev => [...prev, { name, hand: [], done: false }])
+  }
+
+  function startGame() {
+    const newDeck = makeDeck()
+    const dealt = players.map(p => ({ ...p, hand: [newDeck.pop(), newDeck.pop()], done: false }))
+    setDeck(newDeck)
+    setPlayers(dealt)
+    setTurnIndex(0)
+    setRevealed(false)
+    setPhase('gate')
+  }
+
+  function advanceTurn(updatedPlayers, currentIndex) {
+    const next = currentIndex + 1
+    if (next >= updatedPlayers.length) {
+      setPlayers(updatedPlayers)
+      setPhase('done')
+    } else {
+      setPlayers(updatedPlayers)
+      setTurnIndex(next)
+      setRevealed(false)
+      setPhase('gate')
+    }
+  }
+
+  function hit() {
+    const newDeck = [...deck]
+    const card = newDeck.pop()
+    const updated = players.map((p, i) => i === turnIndex ? { ...p, hand: [...p.hand, card] } : p)
+    setDeck(newDeck)
+    const player = updated[turnIndex]
+    if (isBust(player.hand) || isBlackjack(player.hand)) {
+      setPlayers(updated.map((p, i) => i === turnIndex ? { ...p, done: true } : p))
+    } else {
+      setPlayers(updated)
+    }
+  }
+
+  function stand() {
+    const updated = players.map((p, i) => i === turnIndex ? { ...p, done: true } : p)
+    advanceTurn(updated, turnIndex)
+  }
+
+  function continueTurn() {
+    // Called after a bust/blackjack auto-end
+    const updated = players.map((p, i) => i === turnIndex ? { ...p, done: true } : p)
+    advanceTurn(updated, turnIndex)
+  }
+
+  function newGame() {
+    setPlayers(players.map(p => ({ ...p, hand: [], done: false })))
+    setPhase('lobby')
+  }
+
+  if (phase === 'lobby') {
+    return <NameEntry players={players} onJoin={joinLobby} onStart={startGame} />
+  }
+
+  if (phase === 'gate') {
+    return (
+      <PlayerTurnGate
+        player={players[turnIndex]}
+        onReveal={() => { setRevealed(true); setPhase('playing') }}
+      />
+    )
+  }
+
+  if (phase === 'playing') {
+    const player = players[turnIndex]
+    const bust = isBust(player.hand)
+    const bj = isBlackjack(player.hand)
+    return (
+      <div>
+        <PlayerTurn
+          player={player}
+          isDealer={turnIndex === 0}
+          onHit={hit}
+          onStand={stand}
+        />
+        {(bust || bj) && (
+          <div style={{ position: 'fixed', bottom: 24, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
+            <button style={btn('#2c3e50')} onClick={continueTurn}>Continue →</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (phase === 'done') {
+    return <Results players={players} onNewGame={newGame} />
+  }
 }
