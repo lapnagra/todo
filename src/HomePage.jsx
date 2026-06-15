@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Blackjack from './Blackjack'
 import TicTacToe from './TicTacToe'
+import TexasHoldem from './TexasHoldem'
 
 const GAMES = [
   {
@@ -17,6 +18,13 @@ const GAMES = [
     emoji: '⭕',
     bg: '#8e44ad',
   },
+  {
+    id: 'texasholdem',
+    title: "Texas Hold'em",
+    description: "4-player poker. Hole cards, community cards, and a full betting system with blinds.",
+    emoji: '♠',
+    bg: '#1a6b3a',
+  },
 ]
 
 export default function HomePage() {
@@ -24,6 +32,7 @@ export default function HomePage() {
 
   if (selected === 'blackjack') return <Blackjack onBack={() => setSelected(null)} />
   if (selected === 'tictactoe') return <TicTacToe onBack={() => setSelected(null)} />
+  if (selected === 'texasholdem') return <TexasHoldem onBack={() => setSelected(null)} />
 
   return (
     <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif', gap: 32, padding: 24 }}>
