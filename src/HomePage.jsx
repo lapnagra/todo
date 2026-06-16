@@ -37,7 +37,7 @@ export default function HomePage() {
   return (
     <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif', gap: 32, padding: 24 }}>
       <div style={{ textAlign: 'center' }}>
-        <h1 style={{ margin: '0 0 8px' }}>Game Room</h1>
+        <h1 style={{ margin: '0 0 8px' }}>Lap's Games Room</h1>
         <p style={{ color: '#666', margin: 0 }}>Choose a game to play</p>
       </div>
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
